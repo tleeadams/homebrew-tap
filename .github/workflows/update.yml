@@ -80,8 +80,10 @@ jobs:
             any|any_skip_relocation) ;;
             *) echo "::error::The bottle is tied to $cellar, so it can't serve every system."; exit 1 ;;
           esac
+          # Homebrew downloads it as tabherd-<version>.all.bottle.tar.gz; the
+          # file brew bottle leaves has a double dash, its name in the cache.
           local=$(jq -r '.[].bottle.tags[].local_filename' "$json")
-          all="tabherd--$version.all.bottle.tar.gz"
+          all="tabherd-$version.all.bottle.tar.gz"
           mv "$local" "$all"
           sha=$(shasum -a 256 "$all" | cut -d' ' -f1)
           if gh release view "tabherd-$version" >/dev/null 2>&1; then
@@ -114,7 +116,7 @@ jobs:
         run: |
           sh .github/scripts/set-formula.sh "$FORMULA" "$TAG" "$SOURCE" "$BOTTLE" "$CELLAR"
           brew install tleeadams/tap/tabherd 2>&1 | tee install.log
-          grep -q 'Pouring tabherd--' install.log || { echo "::error::Homebrew built Tabherd instead of using the bottle."; exit 1; }
+          grep -q 'Pouring tabherd-' install.log || { echo "::error::Homebrew built Tabherd instead of using the bottle."; exit 1; }
           brew test tleeadams/tap/tabherd
 
   commit:
