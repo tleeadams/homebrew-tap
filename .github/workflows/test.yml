@@ -1,0 +1,36 @@
+name: Test
+
+# Installs the formula on macOS and Linux, runs its test and Homebrew's audit,
+# then starts Tabherd and adds and removes its app.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      # Homebrew's own action; it also taps this repository as checked out.
+      - uses: Homebrew/actions/setup-homebrew@23156a3d9674d7f52f74f1a58979ec4d77847166
+      - run: brew install tleeadams/tap/tabherd
+      - run: brew test tleeadams/tap/tabherd
+      - run: brew audit --strict tleeadams/tap/tabherd
+      - name: Start Tabherd, and add and remove its app
+        env:
+          PORT: '4431'
+        run: |
+          export TABHERD_DATA_DIR="$(mktemp -d)"
+          tabherd
+          for i in $(seq 1 20); do curl -sf "http://127.0.0.1:$PORT/" | grep -q '<title>Tabherd</title>' && break; sleep 1; done
+          curl -sf "http://127.0.0.1:$PORT/" | grep -q '<title>Tabherd</title>' || { echo "::error::The dashboard didn't start."; exit 1; }
+          tabherd --install
+          tabherd --uninstall
