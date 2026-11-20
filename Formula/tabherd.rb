@@ -11,9 +11,6 @@ class Tabherd < Formula
 
   def install
     libexec.install %w[server.js package.json lib public scripts launcher LICENSE README.md CHANGELOG.md]
-    # The launcher looks for Node in node/bin beside the app, as a release
-    # download has it; here that's Homebrew's Node.
-    (libexec/"node/bin").install_symlink Formula["node"].opt_bin/"node"
     # Through opt/, so the command, and the app `tabherd --install` makes,
     # keep working after an upgrade.
     (bin/"tabherd").write <<~SH
@@ -21,6 +18,14 @@ class Tabherd < Formula
       exec "#{opt_libexec}/launcher/tabherd.sh" "$@"
     SH
     chmod 0755, bin/"tabherd"
+  end
+
+  # The launcher looks for Node in node/bin beside the app, as a release
+  # download has it; here that's Homebrew's Node. It's linked at install, not
+  # in the bottle, so one bottle works wherever Homebrew lives.
+  def post_install
+    (libexec/"node/bin").mkpath
+    ln_sf Formula["node"].opt_bin/"node", libexec/"node/bin/node"
   end
 
   def caveats

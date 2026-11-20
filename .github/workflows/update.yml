@@ -1,12 +1,26 @@
 name: Update
 
-# Checks each day for a newer Tabherd release. When there is one, it installs
-# and tests the formula pointed at it on macOS and Linux, then commits that
-# change. Run it by hand from the Actions tab to check now.
+# Checks each day for a newer Tabherd release. When there is one, it builds a
+# bottle for it, publishes the bottle as a release of this repository, checks
+# that macOS and Linux install from that bottle and pass the formula's test,
+# and only then commits the formula pointed at the release and its bottle.
+#
+# A bottle is a prebuilt package: with one, `brew install` unpacks it instead
+# of building, so it doesn't need Apple's command-line developer tools. One
+# bottle, tagged "all", serves every macOS and Linux, since Tabherd is
+# JavaScript and scripts.
+#
+# Run it by hand from the Actions tab to check now, or with "rebuild" to
+# bottle the current release again.
 on:
   schedule:
     - cron: '17 6 * * *'
   workflow_dispatch:
+    inputs:
+      rebuild:
+        description: Bottle the current release again
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,58 +30,110 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.latest.outputs.tag }}
-      sha256: ${{ steps.latest.outputs.sha256 }}
+      source: ${{ steps.latest.outputs.source }}
     steps:
       - uses: actions/checkout@v7
       - name: Compare the formula with the latest release
         id: latest
         env:
           GH_TOKEN: ${{ github.token }}
+          REBUILD: ${{ inputs.rebuild }}
         run: |
           tag=$(gh release view --repo tleeadams/tabherd --json tagName --jq .tagName)
-          if grep -q "/tags/$tag.tar.gz\"" Formula/tabherd.rb; then
-            echo "The formula is already at $tag."
+          if [ "$REBUILD" != true ] && grep -q "/tags/$tag.tar.gz\"" Formula/tabherd.rb && grep -q 'bottle do' Formula/tabherd.rb; then
+            echo "The formula and its bottle are already at $tag."
             exit 0
           fi
-          sha=$(curl -fsSL "https://github.com/tleeadams/tabherd/archive/refs/tags/$tag.tar.gz" | sha256sum | cut -d' ' -f1)
+          source=$(curl -fsSL "https://github.com/tleeadams/tabherd/archive/refs/tags/$tag.tar.gz" | sha256sum | cut -d' ' -f1)
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
 
-  verify:
+  bottle:
     needs: check
     if: needs.check.outputs.tag
+    runs-on: macos-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    outputs:
+      sha256: ${{ steps.bottle.outputs.sha256 }}
+      cellar: ${{ steps.bottle.outputs.cellar }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: brew
+        uses: Homebrew/actions/setup-homebrew@23156a3d9674d7f52f74f1a58979ec4d77847166
+      - name: Build the bottle and publish it
+        id: bottle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check.outputs.tag }}
+          SOURCE: ${{ needs.check.outputs.source }}
+          FORMULA: ${{ steps.brew.outputs.repository-path }}/Formula/tabherd.rb
+        run: |
+          version=${TAG#v}
+          sh .github/scripts/set-formula.sh "$FORMULA" "$TAG" "$SOURCE"
+          brew install --build-bottle tleeadams/tap/tabherd
+          brew bottle --json --no-rebuild --root-url="https://github.com/tleeadams/homebrew-tap/releases/download/tabherd-$version" tleeadams/tap/tabherd
+          json=$(ls tabherd--*.bottle.json)
+          cellar=$(jq -r '.[].bottle.cellar' "$json")
+          case "$cellar" in
+            any|any_skip_relocation) ;;
+            *) echo "::error::The bottle is tied to $cellar, so it can't serve every system."; exit 1 ;;
+          esac
+          local=$(jq -r '.[].bottle.tags[].local_filename' "$json")
+          all="tabherd--$version.all.bottle.tar.gz"
+          mv "$local" "$all"
+          sha=$(shasum -a 256 "$all" | cut -d' ' -f1)
+          if gh release view "tabherd-$version" >/dev/null 2>&1; then
+            gh release upload "tabherd-$version" "$all" --clobber
+          else
+            gh release create "tabherd-$version" "$all" --title "tabherd $version bottle" \
+              --notes "The Homebrew bottle for Tabherd $version, for every macOS and Linux."
+          fi
+          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+          echo "cellar=$cellar" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: [check, bottle]
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
+      - uses: actions/checkout@v7
       - id: brew
         uses: Homebrew/actions/setup-homebrew@23156a3d9674d7f52f74f1a58979ec4d77847166
-      - name: Point the formula at the new release, then install and test it
+      - name: Install from the bottle and test it
         env:
           TAG: ${{ needs.check.outputs.tag }}
-          SHA256: ${{ needs.check.outputs.sha256 }}
+          SOURCE: ${{ needs.check.outputs.source }}
+          BOTTLE: ${{ needs.bottle.outputs.sha256 }}
+          CELLAR: ${{ needs.bottle.outputs.cellar }}
           FORMULA: ${{ steps.brew.outputs.repository-path }}/Formula/tabherd.rb
         run: |
-          perl -pi -e 's|^  url ".*"|  url "https://github.com/tleeadams/tabherd/archive/refs/tags/$ENV{TAG}.tar.gz"|; s|^  sha256 ".*"|  sha256 "$ENV{SHA256}"|' "$FORMULA"
-          brew install --formula tleeadams/tap/tabherd
+          sh .github/scripts/set-formula.sh "$FORMULA" "$TAG" "$SOURCE" "$BOTTLE" "$CELLAR"
+          brew install tleeadams/tap/tabherd 2>&1 | tee install.log
+          grep -q 'Pouring tabherd--' install.log || { echo "::error::Homebrew built Tabherd instead of using the bottle."; exit 1; }
           brew test tleeadams/tap/tabherd
 
   commit:
-    needs: [check, verify]
+    needs: [check, bottle, verify]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      - name: Commit the new release
+      - name: Commit the formula
         env:
           TAG: ${{ needs.check.outputs.tag }}
-          SHA256: ${{ needs.check.outputs.sha256 }}
+          SOURCE: ${{ needs.check.outputs.source }}
+          BOTTLE: ${{ needs.bottle.outputs.sha256 }}
+          CELLAR: ${{ needs.bottle.outputs.cellar }}
         run: |
-          perl -pi -e 's|^  url ".*"|  url "https://github.com/tleeadams/tabherd/archive/refs/tags/$ENV{TAG}.tar.gz"|; s|^  sha256 ".*"|  sha256 "$ENV{SHA256}"|' Formula/tabherd.rb
+          sh .github/scripts/set-formula.sh Formula/tabherd.rb "$TAG" "$SOURCE" "$BOTTLE" "$CELLAR"
+          git diff --quiet && { echo "No change."; exit 0; }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -am "tabherd ${TAG#v}"
+          git commit -am "tabherd ${TAG#v}, with its bottle"
           git push
