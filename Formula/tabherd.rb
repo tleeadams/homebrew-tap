@@ -7,6 +7,11 @@ class Tabherd < Formula
   sha256 "f5743625c497210781b357477954cfa6e250c1787cfa3785ccdce80cd42ca451"
   license "GPL-3.0-or-later"
 
+  bottle do
+    root_url "https://github.com/tleeadams/homebrew-tap/releases/download/tabherd-0.3.0"
+    sha256 cellar: :any_skip_relocation, all: "dc7be1d292f43b24894d1928d6a929f2f4f9cd9b74db5835ae0ce77e9c3698f3"
+  end
+
   depends_on "node"
 
   def install
