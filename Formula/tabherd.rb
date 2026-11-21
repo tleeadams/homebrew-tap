@@ -3,13 +3,13 @@
 class Tabherd < Formula
   desc "Dashboard for your Claude Code sessions"
   homepage "https://github.com/tleeadams/tabherd"
-  url "https://github.com/tleeadams/tabherd/archive/refs/tags/v0.3.0.tar.gz"
-  sha256 "f5743625c497210781b357477954cfa6e250c1787cfa3785ccdce80cd42ca451"
+  url "https://github.com/tleeadams/tabherd/archive/refs/tags/v0.3.1.tar.gz"
+  sha256 "7e297dca71af267854edff38262b25ddd83c423aa60178ff774a316d2f650a9d"
   license "GPL-3.0-or-later"
 
   bottle do
-    root_url "https://github.com/tleeadams/homebrew-tap/releases/download/tabherd-0.3.0"
-    sha256 cellar: :any_skip_relocation, all: "dc7be1d292f43b24894d1928d6a929f2f4f9cd9b74db5835ae0ce77e9c3698f3"
+    root_url "https://github.com/tleeadams/homebrew-tap/releases/download/tabherd-0.3.1"
+    sha256 cellar: :any_skip_relocation, all: "7b0d5d135db1ec39fa8c933e2e06e2f104e51243a7bfaacd6db1197ad66f24eb"
   end
 
   depends_on "node"
