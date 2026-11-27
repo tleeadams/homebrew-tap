@@ -1,7 +1,7 @@
-# Tabherd: a dashboard for your Claude Code and Codex sessions.
+# Tabherd: a dashboard for your coding agents.
 # https://github.com/tleeadams/tabherd
 class Tabherd < Formula
-  desc "Dashboard for your Claude Code and Codex sessions"
+  desc "Dashboard for your coding agents"
   homepage "https://github.com/tleeadams/tabherd"
   url "https://github.com/tleeadams/tabherd/archive/refs/tags/v0.5.0.tar.gz"
   sha256 "b7de5d412df103999eeb2c538ce90f6ae21e3794967b1434a8bb01416c0de355"

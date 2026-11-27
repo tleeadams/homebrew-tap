@@ -1,6 +1,6 @@
 # Homebrew tap for Tabherd
 
-[Tabherd](https://github.com/tleeadams/tabherd) is a dashboard for your Claude Code sessions: which ones need you, which are working, and what they last said.
+[Tabherd](https://github.com/tleeadams/tabherd) is a dashboard for your coding agents (Claude Code, Codex, GitHub Copilot, OpenCode and Cursor CLI): which sessions need you, which are working, and what they last said.
 
 ```
 brew tap tleeadams/tap
@@ -13,4 +13,4 @@ Then run `tabherd` to open the dashboard. `tabherd --install` adds Tabherd to Ap
 
 A workflow here checks each day for a new Tabherd release and, once the formula installs and passes its test with it on macOS and Linux, updates the formula to it.
 
-Tabherd is an independent project. It isn't made or endorsed by Anthropic.
+Tabherd is an independent project. It isn't made or endorsed by Anthropic, OpenAI, GitHub, or the makers of any other app it works with.
